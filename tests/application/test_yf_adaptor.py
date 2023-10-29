@@ -1,8 +1,6 @@
 import datetime
 import itertools
-from unittest import mock
 
-import numpy as np
 import pandas
 
 from application.yfinance_adaptor import downloader

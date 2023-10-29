@@ -1,3 +1,4 @@
+from __future__ import annotations
 import dataclasses
 import enum
 import functools
@@ -49,7 +50,7 @@ class CostSchema(pydantic.BaseModel):
     name: str
     steps: list[StepCharge]
 
-    @pydantic.validator("steps")
+    @pydantic.field_validator("steps")
     def steps_must_be_unique(cls, v, values, **kwargs):
         steps = [(step.lower, step.upper) for step in sorted(v)]
         for i, (step_lower, _step_upper) in enumerate(steps[1:], start=1):

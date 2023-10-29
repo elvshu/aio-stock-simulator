@@ -1,7 +1,6 @@
 import datetime
 from unittest import mock
 
-import pandas as pd
 import pytest
 import time_machine
 from application import yfinance_adaptor
@@ -11,7 +10,7 @@ from django.db import connection
 from tests import factories
 from utils import asx, industrytime
 
-from domain import operations, queries
+from domain import operations
 
 
 @pytest.mark.django_db
