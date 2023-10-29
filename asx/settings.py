@@ -75,12 +75,22 @@ WSGI_APPLICATION = "asx.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
+# database use docker:
+#   run docker image
+#   docker run --name postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:15.4-alpine3.18
+#   tap into container's bash
+#   docker exec -it postgres bash
+#   connect to postgres
+#   psql -h localhost -U postgres
+#   Run postgres command as usual
+
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": "asx",
         "USER": "postgres",
-        "PASSWORD": "password",
+        "PASSWORD": "postgres",
         "HOST": "localhost",
         "PORT": "5432",
     }

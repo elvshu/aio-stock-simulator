@@ -1,9 +1,7 @@
-import concurrent
 import time
 
 from application.yfinance_adaptor import adaptors
-from data.models import ActivePeriod, Company, IndustryGroup
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from domain import operations, queries
 
 
@@ -27,7 +25,7 @@ class Command(BaseCommand):
         start = time.time()
         operations.refresh_asx_company_list()
         operations.update_prices(
-            adaptors.PostGresAdaptor.from_django_settings(), codes=codes
+            adaptors.PostGresDjangoAdaptor.from_django_settings(), codes=codes
         )
         for company in queries.get_listing_companies(active_only=True):
             operations.organise_active_periods(company)

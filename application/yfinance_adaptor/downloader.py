@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import datetime
-import typing as t
 import urllib.parse as urlparse
 
 import pandas
 import pydantic as p
 import yfinance as yf
-from utils import industrytime
 
 from . import adaptors, enums
 
@@ -60,9 +58,9 @@ def handle_yf_dataframes(
 
 
 class YahooFinanceDownloadSpec(p.BaseModel):
-    tickers: t.Union[str, t.List[str]]
-    start: t.Union[str, datetime.datetime] = "1900-01-01"
-    end: t.Union[str, datetime.datetime] = datetime.datetime.now()
+    tickers: str | list[str]
+    start: str | datetime.datetime = "1900-01-01"
+    end: str | datetime.datetime = datetime.datetime.now()
     actions: bool = False
     threads: bool = True
     ignore_tz: bool = True
@@ -76,13 +74,13 @@ class YahooFinanceDownloadSpec(p.BaseModel):
     show_errors: bool = True
     interval: enums.Interval = enums.Interval.ONE_DAY
     prepost: bool = False
-    proxy: t.Optional[str]
+    proxy: str | None = None
     rounding: bool = False
-    timeout: t.Optional[float]
+    timeout: float | None = None
 
-    @p.validator("start", "end")
+    @p.field_validator("start", "end")
     @classmethod
-    def validate_datetime(cls, value) -> t.Optional[str]:
+    def validate_datetime(cls, value) -> str | None:
         if value:
             if isinstance(value, str):
                 _ = datetime.datetime.fromisoformat(value)
@@ -95,9 +93,9 @@ class YahooFinanceDownloadSpec(p.BaseModel):
                 )
         return value
 
-    @p.validator("proxy")
+    @p.field_validator("proxy")
     @classmethod
-    def validate_proxy(cls, value) -> t.Optional[str]:
+    def validate_proxy(cls, value) -> str | None:
         """Optional. Proxy server URL scheme. Default is None"""
         if value:
             if bool(urlparse.urlparse(value).scheme):
@@ -106,7 +104,7 @@ class YahooFinanceDownloadSpec(p.BaseModel):
         return value
 
     def serialize(self) -> dict:
-        data = super().dict()
+        data = super().model_dump()
         data["group_by"] = data["group_by"].value
         data["period"] = data["period"].value
         data["interval"] = data["interval"].value
@@ -116,7 +114,7 @@ class YahooFinanceDownloadSpec(p.BaseModel):
 class YFDownloader(object):
     def __init__(
         self,
-        tickers: t.Union[str, t.List[str]],
+        tickers: str | list[str],
         adaptor: adaptors.Adaptor | None = None,
         **kwargs,
     ) -> None:
@@ -125,7 +123,7 @@ class YFDownloader(object):
         self._downloaded: list[pandas.DataFrame] | None = None
 
     @property
-    def tickers(self) -> t.List[str]:
+    def tickers(self) -> list[str]:
         return (
             self.spec.tickers
             if isinstance(self.spec.tickers, list)
