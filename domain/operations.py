@@ -1,14 +1,15 @@
 import datetime
-import time
 
+import logging
 from application import yfinance_adaptor
 from application.yfinance_adaptor import adaptors
 from data import models
 from django.db import transaction
-from django.db.models import Exists, OuterRef, QuerySet
 from utils import asx, industrytime
 
 from domain import queries
+
+logger = logging.getLogger()
 
 
 @transaction.atomic
@@ -93,9 +94,12 @@ def refresh_asx_company_list() -> None:
     _handle_deactivating_list()
 
 
+@transaction.atomic
 def update_prices(adaptor: adaptors.Adaptor, codes: list[str] | None = None) -> None:
-    active_codes = queries.get_listing_companies(active_only=True).values_list(
-        "trading_code", flat=True
+    active_codes = set(
+        queries.get_listing_companies(active_only=True).values_list(
+            "trading_code", flat=True
+        )
     )
     if codes is not None:
         active_codes &= set(codes)
@@ -106,30 +110,42 @@ def update_prices(adaptor: adaptors.Adaptor, codes: list[str] | None = None) -> 
         .last()
     )
     if latest is None:
+        # fetch from the beginning of the record date -> 1980-01-01
         first_timestamp = industrytime.industry_midnight(datetime.datetime(1980, 1, 1))
     else:
+        # fetch for -7 days from the latest available record, in case data like adjusted close
+        # gets updated.
         first_timestamp = industrytime.as_industry_time(
             latest.timestamp
-        ) + datetime.timedelta(days=1)
+        ) + datetime.timedelta(days=-7)
+
+    # print(f"Fetching codes: {active_codes}\n" f"Since {first_timestamp}")
 
     if first_timestamp.date() > datetime.date.today():
         return None
 
+    # print(f"Deleting prices: {active_codes}\n" f"Since {first_timestamp}")
     # delete all later prices as we are going to update them with
     # potentially newer revaised adj_close etc.
     models.PriceRecord.objects.filter(
         company__trading_code__in=active_codes, timestamp__gte=first_timestamp
     ).delete()
+    # print("Deleting done")
 
     downloader = yfinance_adaptor.YFDownloader(
         tickers=[f"{code}.AX" for code in active_codes],
         start=first_timestamp,
         adaptor=adaptor,
     )
-    downloader.export(table_name=models.PriceRecord._meta.db_table)
+    # print("Exporting")
+    downloader.export(django_model=models.PriceRecord)
 
 
 def organise_active_periods(company: models.Company) -> None:
+    """
+    Use the earliest price's timestamp to determine the listing date of a company
+    Extend/create the active period to make sure it covers all prices.
+    """
     earliest_price = company.prices.order_by("timestamp").first()
     if not earliest_price:
         return None

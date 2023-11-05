@@ -7,6 +7,8 @@ import pandas
 import pydantic as p
 import yfinance as yf
 
+from django.db.models import Model
+
 from . import adaptors, enums
 
 
@@ -28,16 +30,31 @@ def get_database_ready_df(df: pandas.DataFrame, ticker: str) -> pandas.DataFrame
     df.index = df.index.tz_localize("Australia/Melbourne")
     df.reset_index(inplace=True)
     df.columns = replacement_columns
-    company_id_column = [company_id for i in range(len(df))]
+    company_id_column = [company_id for _ in range(len(df))]
     df["company_id"] = company_id_column
+    # if any of the open/close/high/low/volume is nan
+    # then the data is useless
     df = df[df.open.notnull()]
     df = df[df.close.notnull()]
     df = df[df.high.notnull()]
     df = df[df.low.notnull()]
     df = df[df.volume.notnull()]
-    df.loc[df["adj_close"] < 0.001, "adj_close"] = None
-    df.loc[df["adj_close"] > df["close"] * 20, "adj_close"] = None
-    df = df.where(pandas.notnull(df), None)
+    # fix adj_close
+    adj_close = df["adj_close"]
+    adj_close = adj_close.where(
+        adj_close.notnull(), df["close"]  # replace nan adj_close with close
+    )
+    # replace ridiculous values (extreme small or extreme large)
+    # with close
+    adj_close = adj_close.where(
+        adj_close >= 0.001,
+        df["close"],
+    )
+    adj_close = adj_close.where(
+        adj_close < df["close"] * 20,
+        df["close"],
+    )
+    df["adj_close"] = adj_close
     return df
 
 
@@ -138,7 +155,16 @@ class YFDownloader(object):
             self._downloaded = self.download()
         return handle_yf_dataframes(self._downloaded, self.tickers)
 
-    def export(self, table_name: str) -> None:
-        if self.adaptor:
-            for df in self.get_dfs():
-                self.adaptor.export(table_name, df)
+    def export(self, django_model: Model) -> None:
+        # table_has_inited = django_model.objects.exists()
+        objects = []
+        for df in self.get_dfs():
+            company_ids = df["company_id"].unique().tolist()
+            if not len(company_ids):
+                continue
+            # print(company_ids)
+            pending_records = []
+            for record in df.to_dict(orient="records"):
+                pending_records.append(django_model(**record))
+            if pending_records:
+                django_model.objects.bulk_create(pending_records, batch_size=10000)

@@ -77,7 +77,7 @@ class TestListing:
 )
 def test_fetch_prices(mock_yf_downloader, django_db_setup, django_db_blocker):
     test_trading_code = "ATM"
-    postgre_adaptor = adaptors.PostGresAdaptor.from_django_settings()
+    postgre_adaptor = adaptors.PostGresDjangoAdaptor.from_django_settings()
     with connection.cursor() as cursor:
         test_company = factories.CompanyFactory(trading_code=test_trading_code)
         factories.ActivePeriodFactory(
@@ -85,7 +85,7 @@ def test_fetch_prices(mock_yf_downloader, django_db_setup, django_db_blocker):
         )
         cursor.execute("COMMIT")
 
-    operations.update_prices(postgre_adaptor)
+    operations.update_prices(postgre_adaptor, codes=["ATM"])
 
     start_datetime = industrytime.industry_midnight(datetime.datetime(1980, 1, 1))
     mock_yf_downloader.assert_called_once_with(
@@ -96,10 +96,9 @@ def test_fetch_prices(mock_yf_downloader, django_db_setup, django_db_blocker):
     price_count = test_company.prices.count()
     assert price_count != 0
 
+    missing_from = industrytime.as_industry_time(datetime.datetime(2020, 1, 2))
     with connection.cursor() as cursor:
-        test_company.prices.filter(
-            timestamp__gt=industrytime.as_industry_time(datetime.datetime(2020, 1, 2))
-        ).delete()
+        test_company.prices.filter(timestamp__gt=missing_from).delete()
         cursor.execute("COMMIT")
     assert test_company.prices.count() < price_count
 
@@ -107,7 +106,7 @@ def test_fetch_prices(mock_yf_downloader, django_db_setup, django_db_blocker):
 
     mock_yf_downloader.assert_called_with(
         tickers=[f"{test_trading_code}.AX"],
-        start=industrytime.industry_midnight(datetime.datetime(2020, 1, 3)),
+        start=missing_from + datetime.timedelta(days=-7),
         adaptor=postgre_adaptor,
     )
     assert test_company.prices.count() == price_count
@@ -121,7 +120,8 @@ def test_organise_active_period():
     )
     factories.PriceFactory(
         company=test_company,
-        timestamp=industrytime.industry_midnight(datetime.datetime(2020, 1, 1)),
+        timestamp=industrytime.industry_midnight(datetime.datetime(1979, 1, 1)),
     )
     operations.organise_active_periods(test_company)
-    assert test_period.start_date == datetime.date()
+    test_period.refresh_from_db()
+    assert test_period.start_date == datetime.date(1979, 1, 1)

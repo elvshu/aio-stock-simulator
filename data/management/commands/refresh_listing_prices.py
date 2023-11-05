@@ -1,5 +1,6 @@
 import time
 
+from django.db import transaction
 from application.yfinance_adaptor import adaptors
 from django.core.management.base import BaseCommand
 from domain import operations, queries

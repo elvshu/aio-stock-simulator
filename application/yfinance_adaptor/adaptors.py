@@ -1,9 +1,7 @@
 import abc
 
-import django.conf
 import pandas as pd
 from django.conf import settings
-from django.db import connection
 from sqlalchemy import create_engine
 
 
@@ -15,7 +13,7 @@ class Adaptor(abc.ABC):
 
 class PostGresDjangoAdaptor(Adaptor):
     @classmethod
-    def from_django_settings(cls) -> "PostGresAdaptor":
+    def from_django_settings(cls) -> "PostGresDjangoAdaptor":
         return cls(
             user_name=settings.DATABASES["default"]["USER"],
             password=settings.DATABASES["default"]["PASSWORD"],
